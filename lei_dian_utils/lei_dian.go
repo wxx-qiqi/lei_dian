@@ -274,7 +274,6 @@ func WaitForBootComplete(instanceID string) bool {
 			fmt.Printf("模拟器 【%s】 已完全启动\n", instanceID)
 			return true
 		}
-
 		fmt.Printf("模拟器 【%s】 启动中... 等待 %d 秒\n", instanceID, Interval)
 		time.Sleep(time.Duration(Interval) * time.Second)
 	}

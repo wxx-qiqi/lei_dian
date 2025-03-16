@@ -3,24 +3,41 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"gopkg.in/ini.v1"
 	lei "lei_dian/lei_dian_utils"
-	"lei_dian/mysql"
+	"lei_dian/sqlite"
 	"log"
 	"sync"
 	"time"
 )
 
-const (
-	PackageName    = "cn.damai"
-	ClassName      = "cn.damai.homepage.MainActivity"
-	maxConcurrency = 5 // 限制最大并发数
+var (
+	PackageName    string
+	MaxConcurrency int
 )
+
+func init() {
+	// 读取配置文件
+	cfg, err := ini.Load("config.ini")
+	if err != nil {
+		log.Fatalf("加载配置文件失败: %v", err)
+		return
+	}
+
+	// 获取配置项
+	PackageName = cfg.Section("settings").Key("PackageName").String()
+	MaxConcurrency, err = cfg.Section("settings").Key("maxConcurrency").Int()
+	if err != nil {
+		log.Fatalf("读取 MaxConcurrency 失败: %v", err)
+		return
+	}
+}
 
 func main() {
 	// 连接数据库
-	db, err := mysql.ConnectDB()
+	db, err := sqlite.ConnectDB()
 	if err != nil {
-		log.Fatalf("数据库连接失败: %v\n", err)
+		log.Fatalf("连接数据库失败: %v\n", err)
 	}
 	defer db.Close()
 
@@ -31,7 +48,7 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, maxConcurrency) // 控制并发数
+	sem := make(chan struct{}, MaxConcurrency) // 控制并发数
 	for _, simulator := range Simulators {
 		if simulator.ID != "0" {
 			wg.Add(1)
@@ -80,14 +97,14 @@ func HandleAutoImei(db *sql.DB, simulator lei.LDSimulator, wg *sync.WaitGroup, s
 		fmt.Printf("模拟器 【%s】 完全启动\n", simulatorId)
 		if isStart {
 			time.Sleep(2 * time.Second)
-			fmt.Println("======================== 启动app =========================")
+			fmt.Printf("======================== 【%s】启动app =========================\n", simulatorId)
 			er := lei.RunApp("", simulatorId, PackageName)
 			if er != nil {
 				log.Printf("启动app 【%s】 失败: %v\n", simulatorId, err)
 				<-sem // 释放信号量
 				return
 			}
-			fmt.Println("======================== 等待20秒 =========================")
+			fmt.Printf("========================【%s】 等待20秒 =========================\n", simulatorId)
 			time.Sleep(20 * time.Second)
 		}
 
@@ -102,16 +119,16 @@ func HandleAutoImei(db *sql.DB, simulator lei.LDSimulator, wg *sync.WaitGroup, s
 
 		// 存储 IMEI 到数据库
 		if lei.IsValidIMEI(imei) {
-			exists, er := mysql.CheckIMEIExists(db, imei)
+			exists, er := sqlite.CheckIMEIExists(db, imei)
 			if er != nil {
-				log.Printf("mysql检验 【%s】  失败: %v\n", imei, err)
+				log.Printf("数据库检验 【%s】  失败: %v\n", imei, err)
 				<-sem // 释放信号量
 				return
 			}
 			if !exists {
-				errr := mysql.InsertStoreIMEI(db, simulatorId, imei)
+				errr := sqlite.InsertStoreIMEI(db, simulatorId, imei)
 				if errr != nil {
-					log.Printf("mysql插入 【%s】  失败: %v\n", imei, err)
+					log.Printf("数据库插入 【%s】  失败: %v\n", imei, err)
 					<-sem // 释放信号量
 					return
 				}
