@@ -266,18 +266,16 @@ func RunApp(name, id, packagename string) error {
 }
 
 // WaitForBootComplete 检查模拟器是否完全启动
-func WaitForBootComplete(instanceID string) bool {
-	for i := 0; i < MaxWaitTime/Interval; i++ {
+func WaitForBootComplete(instanceID string) {
+	for {
 		// 执行 adb 命令检查 boot_completed 状态
+		fmt.Printf("开始获取【%s】的状态", instanceID)
 		Simulators, err := getByIdSimulators(instanceID)
 		if err == nil && Simulators.AndroidStatus == Starting {
 			fmt.Printf("模拟器 【%s】 已完全启动\n", instanceID)
-			return true
+			return
 		}
 		fmt.Printf("模拟器 【%s】 启动中... 等待 %d 秒\n", instanceID, Interval)
 		time.Sleep(time.Duration(Interval) * time.Second)
 	}
-
-	fmt.Printf("模拟器 【%s】 启动超时，无法获取 IMEI\n", instanceID)
-	return false
 }

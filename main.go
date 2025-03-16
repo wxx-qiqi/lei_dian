@@ -93,20 +93,17 @@ func HandleAutoImei(db *sql.DB, simulator lei.LDSimulator, wg *sync.WaitGroup, s
 		}
 
 		// 等待模拟器完全启动
-		isStart := lei.WaitForBootComplete(simulatorId)
-		fmt.Printf("模拟器 【%s】 完全启动\n", simulatorId)
-		if isStart {
-			time.Sleep(2 * time.Second)
-			fmt.Printf("======================== 【%s】启动app =========================\n", simulatorId)
-			er := lei.RunApp("", simulatorId, PackageName)
-			if er != nil {
-				log.Printf("启动app 【%s】 失败: %v\n", simulatorId, err)
-				<-sem // 释放信号量
-				return
-			}
-			fmt.Printf("========================【%s】 等待20秒 =========================\n", simulatorId)
-			time.Sleep(20 * time.Second)
+		lei.WaitForBootComplete(simulatorId)
+		time.Sleep(2 * time.Second)
+		fmt.Printf("======================== 【%s】启动app =========================\n", simulatorId)
+		er := lei.RunApp("", simulatorId, PackageName)
+		if er != nil {
+			log.Printf("启动app 【%s】 失败: %v\n", simulatorId, err)
+			<-sem // 释放信号量
+			return
 		}
+		fmt.Printf("========================【%s】 等待20秒 =========================\n", simulatorId)
+		time.Sleep(20 * time.Second)
 
 		// 获取 IMEI
 		imei, err := lei.GetPropImei(simulatorId)
