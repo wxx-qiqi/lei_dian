@@ -6,6 +6,7 @@ import (
 	"lei_dian/tools"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -128,14 +129,26 @@ func ModifyAutoImei(id string) error {
 	return err
 }
 
+var Locer sync.Mutex
+
 // GetPropImei 获取imei
 func GetPropImei(id string) (string, error) {
+	//// 等待模拟器启动并连接
+	//adb := exec.Command("adb", "wait-for-device")
+	//err := adb.Run()
+	//if err != nil {
+	//	return "", fmt.Errorf("等待设备连接失败: %v", err)
+	//}
+
+	Locer.Lock()
 	fmt.Printf("正在获取实例 【%s】 的imei\n", id)
 	cmd := exec.Command(LdPath, "getprop", "--index", id, "--key", "phone.imei")
 	// 捕获命令输出
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
+	Locer.Unlock()
+
 	if err != nil {
 		return "", fmt.Errorf("获取 IMEI 失败: %v", err)
 	}
@@ -158,11 +171,41 @@ func IsValidIMEI(imei string) bool {
 
 	// 2. 过滤包含 "adb.exe" 的错误信息
 	if strings.Contains(imei, "adb.exe") {
+		adbKillServer()
+		time.Sleep(10 * time.Second)
+		adbStartServer()
 		fmt.Printf("无效 IMEI (ADB 错误信息): %s\n", imei)
 		return false
 	}
 
 	return true
+}
+
+// 使用以下命令检查模拟器是否已经启动并能连接 adb devices
+func adbDevices() {
+
+}
+
+// 等待模拟器完全启动 adb wait-for-device
+
+// adb kill-server
+func adbKillServer() error {
+	cmd := exec.Command("adb", "kill-server")
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("kill adb 失败: %v", err)
+	}
+	return nil
+}
+
+// adb start-server 重启 ADB 服务
+func adbStartServer() error {
+	cmd := exec.Command("adb", "start-server")
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("start adb 失败: %v", err)
+	}
+	return nil
 }
 
 // SetPropImei 设置imei
@@ -269,7 +312,7 @@ func RunApp(name, id, packagename string) error {
 func WaitForBootComplete(instanceID string) {
 	for {
 		// 执行 adb 命令检查 boot_completed 状态
-		fmt.Printf("开始获取【%s】的状态", instanceID)
+		fmt.Printf("开始获取【%s】的状态\n", instanceID)
 		Simulators, err := getByIdSimulators(instanceID)
 		if err == nil && Simulators.AndroidStatus == Starting {
 			fmt.Printf("模拟器 【%s】 已完全启动\n", instanceID)
@@ -278,4 +321,45 @@ func WaitForBootComplete(instanceID string) {
 		fmt.Printf("模拟器 【%s】 启动中... 等待 %d 秒\n", instanceID, Interval)
 		time.Sleep(time.Duration(Interval) * time.Second)
 	}
+}
+
+// WaitForShutdown 检查模拟器是否完全关闭
+func WaitForShutdown(instanceID string) {
+	for {
+		fmt.Printf("检查模拟器【%s】是否关闭...\n", instanceID)
+
+		// 获取当前所有运行中的模拟器
+		Simulators, err := getByIdSimulators(instanceID)
+		if err != nil || Simulators.AndroidStatus == NotStarted {
+			fmt.Printf("✅ 模拟器 【%s】 已完全关闭\n", instanceID)
+			return
+		}
+
+		fmt.Printf("⏳ 模拟器 【%s】 仍在运行... 等待 %d 秒\n", instanceID, Interval)
+		time.Sleep(time.Duration(Interval) * time.Second)
+	}
+}
+
+// waitForDevice 等待设备完全连接
+func waitForDevice(instanceIndex string) bool {
+	fmt.Printf("模拟器 [%s] 等待 ADB 设备连接...\n", instanceIndex)
+
+	for i := 0; i < 10; i++ { // 最多等待 30 秒
+		cmd := exec.Command("adb", "devices")
+		output, _ := cmd.Output()
+		devices := strings.Split(string(output), "\n")
+
+		for _, line := range devices {
+			if strings.Contains(line, "emulator-"+instanceIndex) && strings.Contains(line, "device") {
+				fmt.Printf("模拟器 [%s] 已连接 ADB。\n", instanceIndex)
+				return true
+			}
+		}
+
+		fmt.Printf("模拟器 [%s] 设备未就绪，等待 3 秒...\n", instanceIndex)
+		time.Sleep(3 * time.Second)
+	}
+
+	fmt.Printf("模拟器 [%s] 超时未连接 ADB。\n", instanceIndex)
+	return false
 }

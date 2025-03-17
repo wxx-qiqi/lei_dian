@@ -102,8 +102,8 @@ func HandleAutoImei(db *sql.DB, simulator lei.LDSimulator, wg *sync.WaitGroup, s
 			<-sem // 释放信号量
 			return
 		}
-		fmt.Printf("========================【%s】 等待20秒 =========================\n", simulatorId)
-		time.Sleep(20 * time.Second)
+		fmt.Printf("========================【%s】 等待30秒 =========================\n", simulatorId)
+		time.Sleep(30 * time.Second)
 
 		// 获取 IMEI
 		imei, err := lei.GetPropImei(simulatorId)
@@ -135,7 +135,7 @@ func HandleAutoImei(db *sql.DB, simulator lei.LDSimulator, wg *sync.WaitGroup, s
 		// 关闭模拟器
 		fmt.Printf("=====================关闭模拟器【%s】=========================\n", simulatorId)
 		lei.Quit("", simulatorId)
-
+		lei.WaitForShutdown(simulatorId)
 	}
 
 }
